@@ -1,0 +1,22 @@
+<service>
+	<id>ICaGenImage</id>
+	<name>Ica Image Generator</name>
+	<description>Ica Image Generator</description>
+	<workingdirectory>%BASE%/..</workingdirectory>
+	<logpath>%BASE%/../logs</logpath>
+	<logmode>rotate</logmode>
+	<executable>%BASE%/jdk/bin/java</executable>
+	<startmode>Automatic</startmode>
+	<startargument>-cp</startargument>
+	<startargument>lib/*</startargument>
+	<startargument>com.s2o.IcaImageGenSrvApplication</startargument>
+	<startargument>--spring.config.location=./conf/application.yml</startargument>
+	<stoptimeout>30sec</stoptimeout>
+	<onfailure action="restart" delay="10 sec"/>
+	<serviceaccount> <!--These variables must be replaced -->
+		<domain>${domain}</domain>
+		<user>${user}</user>
+		<password>${password}</password>
+		<allowservicelogon>true</allowservicelogon>
+	</serviceaccount>
+</service>

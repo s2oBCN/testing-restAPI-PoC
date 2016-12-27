@@ -1,0 +1,202 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        jcenter()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath("net.serenity-bdd:serenity-gradle-plugin:" + serenityVersion)
+    }
+}
+plugins {
+    id 'java'
+    id 'scala'
+    id 'groovy'
+    id 'maven-publish'
+    id "org.springframework.boot" version '1.4.2.RELEASE'
+    id 'net.researchgate.release' version '2.4.0'
+    id "com.github.lkishalmi.gatling" version "0.4.1"
+    id 'distribution'
+
+}
+apply plugin: 'net.serenity-bdd.aggregator'
+
+def operatingSystems = ["LinuxRedHat","LinuxSuse","Windows"]
+defaultTasks 'clean', 'test'
+
+repositories {
+    mavenLocal()
+    jcenter()     
+}
+
+sourceSets {
+    integTest {
+        java.srcDir file('src/integTest/java')
+        resources.srcDir file('src/integTest/resources')
+        compileClasspath += sourceSets.main.output + sourceSets.test.output + configurations.testRuntime
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output + configurations.testRuntime
+    }
+}
+task integTest(type:Test) {
+    testClassesDir = sourceSets.integTest.output.classesDir
+    classpath = sourceSets.integTest.runtimeClasspath
+}
+check.dependsOn integTest
+//integrationTest.mustRunAfter test
+
+dependencies {
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-web', version:springBootVersion
+    compile group: 'de.codecentric', name: 'spring-boot-admin-server', version: springBootAdminVersion
+    compile group: 'de.codecentric', name: 'spring-boot-admin-server-ui', version: springBootAdminVersion
+    compile group: 'de.codecentric', name: 'spring-boot-admin-starter-client', version: springBootAdminVersion
+    compile group: 'org.jfree', name: 'jfreechart', version:jfreechartVersion
+    compile group: 'org.apache.servicemix.bundles', name: 'org.apache.servicemix.bundles.spring-test', version: servicemixVersion
+
+    // For unit testing
+    testCompile group: 'org.codehaus.groovy', name: 'groovy-all', version: groovyVersion
+    testCompile group: 'org.spockframework', name: 'spock-core', version: spockVersion
+    testCompile group: 'org.spockframework', name: 'spock-spring', version: spockVersion
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test', version:springBootVersion
+
+    // For integration testing
+    integTestCompile sourceSets.main.output
+    integTestCompile sourceSets.test.output
+    integTestCompile configurations.testCompile
+    integTestCompile configurations.testRuntime
+
+    integTestCompile group: 'org.assertj', name: 'assertj-core', version: assertjVersion
+    integTestCompile group: 'com.jayway.jsonpath', name: 'json-path', version:jsonPathVersion
+
+    integTestCompile group: 'info.cukes', name: 'cucumber-core', version: cucumberVersion
+    integTestCompile group: 'info.cukes', name: 'cucumber-java', version: cucumberVersion
+    integTestCompile group: 'info.cukes', name: 'cucumber-junit', version: cucumberVersion
+
+    integTestCompile group: 'net.serenity-bdd', name: 'serenity-core', version: serenityVersion
+    integTestCompile group: 'net.serenity-bdd', name: 'serenity-junit', version: serenityVersion
+    integTestCompile group: 'net.serenity-bdd', name: 'serenity-spring', version: serenityVersion
+    integTestCompile group: 'net.serenity-bdd', name: 'serenity-rest-assured', version: serenityVersion
+    integTestCompile group: 'net.serenity-bdd', name: 'serenity-cucumber', version: serenityCucumberVersion
+
+    // For performance testing
+    compile group: 'org.scala-lang', name: 'scala-library', version: scalaVersion
+    compile group: 'io.gatling', name: 'gatling-app', version:  gatlingVersion
+    compile group: 'io.gatling.highcharts', name: 'gatling-charts-highcharts', version: gatlingVersion
+
+    //for dynamic instantiation
+    compile group: 'org.objenesis', name: 'objenesis', version: objenesisVersion
+    compile group: 'cglib', name: 'cglib-nodep', version: cglibVersion
+
+}
+
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(GroovyCompile) {
+    options.encoding = "UTF-8" // for Java compilation
+    groovyOptions.encoding = "UTF-8" // for Groovy compilation
+}
+
+tasks.withType(ScalaCompile) {
+    scalaCompileOptions.with {
+        force = true
+    }
+}
+
+springBoot {
+    executable = true
+}
+jar {
+    manifest {
+        attributes(
+                'Class-Path': configurations.compile.collect { it.getName() }.join(' '),
+                'Main-Class': 'com.s2o.IcaImageGenSrvApplication'
+        )
+    }
+}
+
+/**
+ * Task to create daemon packages for compatibles O.S
+ *      --> TODO think another way
+ *             with http://wrapper.tanukisoftware.com/doc/english/props-example-config.html
+ */
+tasks.addRule('Pattern: daemonPackage<ID>') { String taskName ->
+    if (taskName.startsWith('daemonPackage')) {
+        task(taskName, type: Zip, dependsOn: 'jar') {
+            def os = taskName.replace("daemonPackage", "")
+            baseName = "${project.name}-daemon-${os}"
+
+            //Create base structure
+            from('daemon-service/dist/base'){
+                includeEmptyDirs = true
+                exclude '**/*.keep'
+            }
+
+            //Copy libs
+            from([configurations.runtime, tasks.jar.archivePath]) {
+                rename(tasks.jar.archivePath.name, "${project.name}.jar")
+                into 'lib'
+            }
+
+            //Copy service script
+            from(fileTree("daemon-service/dist/bin/${os}")) {
+                into 'bin'
+                if (os == "Windows") {
+                    rename("service.xml", "${project.name}-daemon.xml")
+                    rename("service.exe.config", "${project.name}-daemon.exe.config")
+                }
+            }
+            if (os == "Windows") {
+                configurations {
+                    windowsService
+                }
+                dependencies {
+                    windowsService group: 'com.sun.winsw', name: 'winsw', version: '1.18', classifier: 'bin', ext: 'exe'
+                }
+                from(configurations.windowsService) {
+                    into 'bin'
+                    rename("(.*)", "${project.name}-daemon.exe")
+
+                }
+            }
+
+            //Copy application.yml config
+            from(fileTree("src/main/resources/application.yml")){
+                into 'conf'
+            }
+
+        }
+    }
+}
+task daemonPackage(group: 'build') {
+    dependsOn << operatingSystems.collect { "daemonPackage$it" }
+}
+
+distributions {
+    main {
+        contents {
+            from(daemonPackage) {
+                into "distributions"
+            }
+        }
+    }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+artifacts {
+    archives sourcesJar
+    archives jar
+    archives distZip
+}
+
+release {
+    preTagCommitMessage = '[Release]: '
+    tagCommitMessage = '[Release]: creating tag '
+    newVersionCommitMessage = '[Release]: new snapshot version '
+    tagTemplate = 'v${version}'
+}

@@ -1,0 +1,25 @@
+spring.application.name: Scattergram-Server
+spring.boot.admin.url: http://localhost:20666
+banner.image.location: classpath:s2o.jpg
+server:
+  port: 20666
+  address: 127.0.0.1
+  server-header: ICA ImageGenerator
+  tomcat:
+    accesslog:
+      directory: ${user.home}/LOGS
+      enabled: true
+      pattern: common
+      prefix: access_log
+      suffix: .log
+logging:
+  path: ${user.home}/LOGS
+  level: error
+  pattern: ImgGenSrv
+
+imageWritter:
+  maxPool.size: 10
+  queue.capacity: 1000
+files:
+  upload:
+    baseDir: ${user.home}

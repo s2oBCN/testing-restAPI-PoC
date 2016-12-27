@@ -1,0 +1,59 @@
+@Library("pipeline-init@dev")
+import s2o.devops.tools.ArtifactoryTools
+
+node('dockerserver')
+{
+	// Todo create a s2o docker image
+    docker.image('dgroup/java8-gradle').inside
+    {
+        stage('Checkout')
+        {
+            checkout scm
+        }
+        
+        stage('Compile')
+        {
+            sh '''
+                gradle clean;
+                gradle assemble;
+                '''
+        }
+        
+        stage('Test')
+        {
+            parallel (
+                "Unit Tests" :          {   sh '''
+                                                gradle test;
+                                                '''
+                                        },
+                "Integration Tests" :   {   
+                                            try
+                                            {   
+                                                sh '''
+                                                gradle integTest;
+                                                '''
+                                            }catch (error){
+                                                throw error
+                                            }finally{
+                                                step([$class: 'JUnitResultArchiver', testResults: '**/target/site/serenity/SERENITY-JUNIT-*.xml'])
+                                            }
+                                        },
+                /*"Performance Tests" :   {   sh '''
+                                                gradle gatlingRun;
+                                                '''
+                                        }*/
+                )
+            
+        }
+        stage("Package")
+        {
+            sh '''
+                gradle daemonPackage;
+            '''
+        }
+		stage("Publish"){
+            
+           
+        }
+    }
+}
