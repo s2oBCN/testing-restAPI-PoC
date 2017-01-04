@@ -1,4 +1,4 @@
-package com.s2o.scattergram.images.features.stepsDef;
+package com.s2o.scattergram.images.features.definitions;
 
 import com.jayway.restassured.RestAssured;
 import com.jayway.restassured.response.Response;
