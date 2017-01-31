@@ -1,6 +1,7 @@
 buildscript {
     repositories {
         mavenLocal()
+        mavenCentral()
         jcenter()
         maven {
             url "https://plugins.gradle.org/m2/"
@@ -117,72 +118,6 @@ jar {
     }
 }
 
-/**
- * Task to create daemon packages for compatibles O.S
- *      --> TODO think another way
- *             with http://wrapper.tanukisoftware.com/doc/english/props-example-config.html
- */
-tasks.addRule('Pattern: daemonPackage<ID>') { String taskName ->
-    if (taskName.startsWith('daemonPackage')) {
-        task(taskName, type: Zip, dependsOn: 'jar') {
-            def os = taskName.replace("daemonPackage", "")
-            baseName = "${project.name}-daemon-${os}"
-
-            //Create base structure
-            from('daemon-service/dist/base'){
-                includeEmptyDirs = true
-                exclude '**/*.keep'
-            }
-
-            //Copy libs
-            from([configurations.runtime, tasks.jar.archivePath]) {
-                rename(tasks.jar.archivePath.name, "${project.name}.jar")
-                into 'lib'
-            }
-
-            //Copy service script
-            from(fileTree("daemon-service/dist/bin/${os}")) {
-                into 'bin'
-                if (os == "Windows") {
-                    rename("service.xml", "${project.name}-daemon.xml")
-                    rename("service.exe.config", "${project.name}-daemon.exe.config")
-                }
-            }
-            if (os == "Windows") {
-                configurations {
-                    windowsService
-                }
-                dependencies {
-                    windowsService group: 'com.sun.winsw', name: 'winsw', version: '1.18', classifier: 'bin', ext: 'exe'
-                }
-                from(configurations.windowsService) {
-                    into 'bin'
-                    rename("(.*)", "${project.name}-daemon.exe")
-
-                }
-            }
-
-            //Copy application.yml config
-            from(fileTree("src/main/resources/application.yml")){
-                into 'conf'
-            }
-
-        }
-    }
-}
-task daemonPackage(group: 'build') {
-    dependsOn << operatingSystems.collect { "daemonPackage$it" }
-}
-
-distributions {
-    main {
-        contents {
-            from(daemonPackage) {
-                into "distributions"
-            }
-        }
-    }
-}
 
 task sourcesJar(type: Jar, dependsOn: classes) {
     classifier = 'sources'
